@@ -217,12 +217,6 @@ end
 M.prev_time = uv.hrtime()
 M.tick = {}
 
-local function clamp(first, second, max)
-  if first < 1 then first = 1 end
-  if second > max then second = max end
-  return first, second
-end
-
 function M.clear_cache()
   M.buffer_contents = {}
   M.tick = {}
