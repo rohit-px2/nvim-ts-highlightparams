@@ -80,6 +80,8 @@ end
 -- Like ts_utils.get_node_text but without the nvim api call (use buffer parameter)
 function M.get_node_text(node, buffer)
   local start_row, start_col, end_row, end_col = node:range()
+  --print("Start row:", start_row)
+  --print("Start col:", start_col)
   if start_row ~= end_row then
     local lines = {}
     for i = start_row, end_row + 1 do
@@ -87,10 +89,12 @@ function M.get_node_text(node, buffer)
     end
     lines[1] = string.sub(lines[1], start_col+1)
     lines[#lines] = string.sub(lines[#lines], 1, end_col)
+    print(lines[1])
     return lines
   else
-    local line = buffer[start_row]
-    return line and { string.sub(line, start_col + 1, end_col) } or {}
+    local line = buffer[start_row+1]
+    local x = line and { string.sub(line, start_col + 1, end_col) } or {}
+    return x
   end
 end
 
@@ -141,9 +145,19 @@ end
 
 -- Highlights all usages of parameters in root from start_row to end_row.
 function M.highlight_parameters_async(root, bufnr, start_row, end_row, query, buffer)
+  --print(start_row)
+  --print(end_row)
   local i = 0
   local usage_buffer = {}
-  for id, node in query:iter_captures(root, bufnr, start_row, end_row) do
+  local iter = query:iter_captures(root, bufnr, start_row, end_row)
+  --for id, node in query:iter_captures(root, bufnr, start_row, end_row) do
+  while true do
+    local status, id, node = pcall(function() return iter() end)
+    if status == false then
+      M.clear_cache()
+      return
+    end
+    if not id or not node then return end
     -- If node is a parameter, highlight its usages
     if query.captures[id] == 'parameter' then
       i = i + 1
@@ -175,13 +189,12 @@ function M.highlight_parameters_v2()
   M.current_buffer = bufnr
   local tstree = parser:parse()
   local tree = tstree[1]
-  local query = vim.treesitter.get_query(lang, 'highlights')
+  local query = queries.get_query(lang, 'highlights')
   local root = tree:root()
   local start_row, _, end_row, _ = root:range()
-  start_row = start_row + 1
   -- ts_utils.node_get_text is blocking so attempting to run it and use its return value gives
   -- us an error, so let's make our own.
-  M.buffer_contents = vim.api.nvim_buf_get_lines(bufnr, start_row, end_row+1, false)
+  M.buffer_contents = vim.api.nvim_buf_get_lines(bufnr, 0, end_row, true)
   --M.buffers[bufnr] = M.buffer_contents
   M.highlight_parameters_async(root, bufnr, start_row, end_row, query, M.buffer_contents)
   --local t = uv.thread_self()
@@ -198,7 +211,7 @@ end
 function M.get_view_range()
   local top_line = tonumber(vim.api.nvim_exec([[echo line('w0')]], true))
   local bot_line = tonumber(vim.api.nvim_exec([[echo line('w$')]], true))
-  return top_line, bot_line
+  return top_line-1, bot_line-1
 end
 
 M.prev_time = uv.hrtime()
@@ -264,12 +277,13 @@ function M.highlight_parameters_in_view()
       end
     end
     local root_start, _, root_end, _ = cur_node:range()
-    root_start = root_start + 1
-    root_end = root_end + 1
     view_start = root_start and math.min(view_start, root_start) or view_start
-    view_end = root_end and math.max(view_end, root_end-1) or view_end
-    view_start, view_end = clamp(view_start, view_end, lines)
-    M.buffer_contents = vim.api.nvim_buf_get_lines(bufnr, 1, view_end, true)
+    view_end = root_end and math.max(view_end, root_end) or view_end
+    if view_start < 0 then view_start = 0 end
+    if view_end > lines-1 then view_end = lines-1 end
+    --print(view_start)
+    --print(view_end)
+    M.buffer_contents = vim.api.nvim_buf_get_lines(bufnr, 0, view_end+1, true)
     -- Highlight in current function if user cannot see parameters
     --local cur_node = ts_utils.get_node_at_cursor()
     --while not cur_node:type():find("function") do
