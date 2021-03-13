@@ -22,6 +22,7 @@ local function dump(o)
       return tostring(o)
    end
 end
+
 -- benchmarks a function, returning the amount of time it took
 -- to run in nanoseconds (using uv.hrtime)
 -- @param f function the function to benchmark
@@ -32,43 +33,8 @@ local function benchmark(f, ...)
   return delta
 end
 
-function M.highlight_parameters_get_time()
-  print("Time Elapsed:", benchmark(M.highlight_params))
-end
-
---function M.highlight_parameters_v2_get_time()
-  --print("Time Elapsed:", benchmark(M.highlight_params_v2))
---end
-
-
---function M.highlight_params_v2()
-  --local bufnr = vim.api.nvim_get_current_buf()
-  --local start=uv.hrtime()
-  --local params = queries.get_capture_matches(bufnr, '@parameter', 'highlights')
-  --start = print_delta(start)
-  --for _, node_tbl in ipairs(params) do
-    --local node = node_tbl["node"]
-    --local current_scope = locals.containing_scope(node)
-    ----print(node:range())
-    --start = print_delta(start)
-    --local usages = locals.find_usages(node, current_scope, bufnr)
-    --start = print_delta(start)
-    --for _, usage_node in ipairs(usages) do
-      --ts_utils.highlight_node(usage_node, bufnr, semantic_ns, 'TSParameter')
-    --end
-    --start=print_delta(start)
-  --end
---end
-
-function M.safe_print(...)
-  local args = {...}
-  vim.schedule(function()
-    for _, arg in ipairs(args) do
-      print(arg)
-    end
-  end)
-end
-
+-- Highlights every node in nodes with the given buffer, highlighting namespace,
+-- and highlight group
 function M.highlight_nodes(nodes, bufnr, namespace, hlgroup)
   for _, node in ipairs(nodes) do
     vim.schedule(function()
@@ -98,6 +64,9 @@ function M.get_node_text(node, buffer)
   end
 end
 
+-- Gets usages of node within the given scope.
+-- Here, a "usage" means an identifier within the scope whose text matches
+-- the text of node.
 function M.get_usages(node, scope, bufnr, usage_nodes, buffer, tbl, text)
   text = text or M.get_node_text(node, buffer)[1]
   usage_nodes = usage_nodes or {}
@@ -144,7 +113,7 @@ local function is_func_node(type)
 end
 
 -- Highlights all usages of parameters in root from start_row to end_row.
-function M.highlight_parameters_async(root, bufnr, start_row, end_row, query, buffer)
+function M.highlight_parameters_in(root, bufnr, start_row, end_row, query, buffer)
   --print(start_row)
   --print(end_row)
   local i = 0
@@ -196,7 +165,7 @@ function M.highlight_parameters_v2()
   -- us an error, so let's make our own.
   M.buffer_contents = vim.api.nvim_buf_get_lines(bufnr, 0, end_row, true)
   --M.buffers[bufnr] = M.buffer_contents
-  M.highlight_parameters_async(root, bufnr, start_row, end_row, query, M.buffer_contents)
+  M.highlight_parameters_in(root, bufnr, start_row, end_row, query, M.buffer_contents)
   --local t = uv.thread_self()
   --local handle
   --handle = uv.new_thread(function()
@@ -207,7 +176,8 @@ function M.highlight_parameters_v2()
   --handle:send()
 end
 
--- Gets the starting and ending line that is viewable in the current buffer.
+-- Gets the starting and ending line that is viewable in the current buffer
+-- Note: 0-indexed
 function M.get_view_range()
   local top_line = tonumber(vim.api.nvim_exec([[echo line('w0')]], true))
   local bot_line = tonumber(vim.api.nvim_exec([[echo line('w$')]], true))
@@ -217,6 +187,7 @@ end
 M.prev_time = uv.hrtime()
 M.tick = {}
 
+-- Clears cache contents
 function M.clear_cache()
   M.buffer_contents = {}
   M.tick = {}
@@ -224,8 +195,9 @@ function M.clear_cache()
 end
 
 -- Only highlight parameters that the user can see
--- This should be faster than highlight_parameters_v2, otherwise
--- there is no point in having this
+-- Should work well with highlight_parameters_v2
+-- (run highlight_parameters_v2 on BufEnter, and run this continuously
+-- (CursorHold, CursorMoved, TextChanged))
 function M.highlight_parameters_in_view()
   local handle
   handle = uv.new_async(vim.schedule_wrap(function()
@@ -284,7 +256,7 @@ function M.highlight_parameters_in_view()
       --if cur_node == root then break end
       --cur_node = cur_node:parent()
     --end
-    M.highlight_parameters_async(root, bufnr, view_start, view_end, query, M.buffer_contents)
+    M.highlight_parameters_in(root, bufnr, view_start, view_end, query, M.buffer_contents)
     handle:close()
   end))
   handle:send()
