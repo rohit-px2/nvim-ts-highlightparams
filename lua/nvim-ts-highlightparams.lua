@@ -69,7 +69,10 @@ end
 -- Gets usages of node within the given scope.
 -- Here, a "usage" means an identifier within the scope whose text matches
 -- the text of node.
-function M.get_usages(node, scope, bufnr, usage_nodes, buffer, tbl, text)
+function M.get_usages(node, scope, bufnr, usage_nodes, buffer, tbl, text, sr, sc, er, ec)
+  if not sr then
+    sr, sc, er, ec = node:range()
+  end
   text = text or M.get_node_text(node, buffer)[1]
   usage_nodes = usage_nodes or {}
   for pnode, _ in scope:iter_children() do
@@ -81,8 +84,13 @@ function M.get_usages(node, scope, bufnr, usage_nodes, buffer, tbl, text)
     -- First we check if it is a scope
     if pnode:named_child_count() ~= 0 then
       -- Iterate over children recursively
-     M.get_usages(node, pnode, bufnr, usage_nodes, buffer, tbl, text)
+     M.get_usages(node, pnode, bufnr, usage_nodes, buffer, tbl, text, sr, sc, er, ec)
     elseif pnode:type() == 'identifier' and M.get_node_text(pnode, buffer)[1] == text then
+      -- A function with the same name as the parameter should not be highlighted
+      -- In general, identifiers with the same name as a parameter, but that come before
+      -- the parameter, are not usages of the parameter.
+      local nr, nc, _, _= pnode:range()
+      if nr < sr or (nr == sr and nc < sc) then goto cont end
       usage_nodes[#usage_nodes+1] = pnode
       tbl[pnode] = text
     end
@@ -144,12 +152,7 @@ function M.highlight_parameters_in(root, bufnr, start_row, end_row, query, buffe
   end
 end
 
-function M.thing()
-  local cur_time = uv.hrtime()
-  local x = locals.get_locals(0)
-  print("Time Elapsed:", (uv.hrtime() - cur_time) / 1000000)
-  print("Num Locals:", #x)
-end
+
 -- Around 5x faster than v1
 function M.highlight_parameters_v2()
   local bufnr = vim.api.nvim_get_current_buf()
@@ -198,6 +201,7 @@ function M.clear_cache()
   M.tick = {}
   M.parsers = {}
   vim.api.nvim_buf_clear_namespace(0, semantic_ns, 0, -1)
+  vim.api.nvim_buf_clear_namespace(0, scope_ns, 0, -1)
 end
 
 -- Only highlight parameters that the user can see
