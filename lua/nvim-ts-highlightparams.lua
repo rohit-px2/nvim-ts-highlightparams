@@ -3,6 +3,7 @@ local locals = require 'nvim-treesitter.locals'
 local parsers = require 'nvim-treesitter.parsers'
 local queries = require 'nvim-treesitter.query'
 local semantic_ns = vim.api.nvim_create_namespace('params-highlight')
+local scope_ns = vim.api.nvim_create_namespace('scope-highlight')
 local uv = vim.loop
 local M = {}
 M.langs = {}
@@ -36,6 +37,7 @@ end
 -- Highlights every node in nodes with the given buffer, highlighting namespace,
 -- and highlight group
 function M.highlight_nodes(nodes, bufnr, namespace, hlgroup)
+  vim.api.nvim_buf_clear_namespace(bufnr, namespace, 0, -1)
   for _, node in ipairs(nodes) do
     vim.schedule(function()
       ts_utils.highlight_node(node, bufnr, namespace, hlgroup)
@@ -113,10 +115,7 @@ local function is_func_node(type)
 end
 
 -- Highlights all usages of parameters in root from start_row to end_row.
-function M.highlight_parameters_in(root, bufnr, start_row, end_row, query, buffer)
-  --print(start_row)
-  --print(end_row)
-  local i = 0
+function M.highlight_parameters_in(root, bufnr, start_row, end_row, query, buffer, namespace)
   local usage_buffer = {}
   local iter = query:iter_captures(root, bufnr, start_row, end_row)
   --for id, node in query:iter_captures(root, bufnr, start_row, end_row) do
@@ -129,22 +128,28 @@ function M.highlight_parameters_in(root, bufnr, start_row, end_row, query, buffe
     if not id or not node then return end
     -- If node is a parameter, highlight its usages
     if query.captures[id] == 'parameter' then
-      i = i + 1
       local scope = node:parent()
       -- Get function scope
       while true do
-        if scope == root then break end
+        if scope == root then goto cont end
         if is_func_node(scope:type()) then
           break
         end
         scope = scope:parent()
       end
-      local usage_nodes = M.get_usages(node, scope, bufnr, {}, buffer, usage_buffer)
-      M.highlight_nodes(usage_nodes, bufnr, semantic_ns, 'TSParameter')
+      local usage_nodes = M.get_usages(node, scope, bufnr, {}, buffer, usage_buffer, nil)
+      M.highlight_nodes(usage_nodes, bufnr, namespace, 'TSParameter')
     end
+    ::cont::
   end
 end
 
+function M.thing()
+  local cur_time = uv.hrtime()
+  local x = locals.get_locals(0)
+  print("Time Elapsed:", (uv.hrtime() - cur_time) / 1000000)
+  print("Num Locals:", #x)
+end
 -- Around 5x faster than v1
 function M.highlight_parameters_v2()
   local bufnr = vim.api.nvim_get_current_buf()
@@ -165,7 +170,7 @@ function M.highlight_parameters_v2()
   -- us an error, so let's make our own.
   M.buffer_contents = vim.api.nvim_buf_get_lines(bufnr, 0, end_row, true)
   --M.buffers[bufnr] = M.buffer_contents
-  M.highlight_parameters_in(root, bufnr, start_row, end_row, query, M.buffer_contents)
+  M.highlight_parameters_in(root, bufnr, start_row, end_row, query, M.buffer_contents, semantic_ns)
   --local t = uv.thread_self()
   --local handle
   --handle = uv.new_thread(function()
@@ -192,6 +197,7 @@ function M.clear_cache()
   M.buffer_contents = {}
   M.tick = {}
   M.parsers = {}
+  vim.api.nvim_buf_clear_namespace(0, semantic_ns, 0, -1)
 end
 
 -- Only highlight parameters that the user can see
@@ -233,7 +239,7 @@ function M.highlight_parameters_in_view()
     --local query = vim.treesitter.get_query(lang, 'highlights')
     local root = parser:parse()[1]:root()
     local view_start, view_end = M.get_view_range()
-    local cur_node = ts_utils.get_node_at_cursor()
+    local cur_node = ts_utils.get_node_at_cursor(0)
     if not cur_node then return end
     if cur_node == root then return end
     while true do
@@ -256,7 +262,7 @@ function M.highlight_parameters_in_view()
       --if cur_node == root then break end
       --cur_node = cur_node:parent()
     --end
-    M.highlight_parameters_in(root, bufnr, view_start, view_end, query, M.buffer_contents)
+    M.highlight_parameters_in(root, bufnr, view_start, view_end, query, M.buffer_contents, scope_ns)
     handle:close()
   end))
   handle:send()
