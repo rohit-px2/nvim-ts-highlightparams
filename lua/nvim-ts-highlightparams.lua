@@ -19,9 +19,9 @@ local function dump(o)
          s = s .. '['..k..'] = ' .. dump(v) .. ','
       end
       return s .. '} '
-   else
+    else
       return tostring(o)
-   end
+    end
 end
 
 -- benchmarks a function, returning the amount of time it took
@@ -36,8 +36,10 @@ end
 
 -- Highlights every node in nodes with the given buffer, highlighting namespace,
 -- and highlight group
-function M.highlight_nodes(nodes, bufnr, namespace, hlgroup)
-  vim.api.nvim_buf_clear_namespace(bufnr, namespace, 0, -1)
+function M.highlight_nodes(nodes, bufnr, namespace, hlgroup, start_row, end_row)
+  start_row = start_row or 0
+  end_row = end_row or -1
+  vim.api.nvim_buf_clear_namespace(bufnr, namespace, start_row, end_row)
   for _, node in ipairs(nodes) do
     vim.schedule(function()
       ts_utils.highlight_node(node, bufnr, namespace, hlgroup)
@@ -91,6 +93,7 @@ function M.get_usages(node, scope, bufnr, usage_nodes, buffer, tbl, text, sr, sc
       -- the parameter, are not usages of the parameter.
       local nr, nc, _, _= pnode:range()
       if nr < sr or (nr == sr and nc < sc) then goto cont end
+      -- Check the s-expr of the parent and see if we are in a declaration
       usage_nodes[#usage_nodes+1] = pnode
       tbl[pnode] = text
     end
@@ -130,6 +133,7 @@ function M.highlight_parameters_in(root, bufnr, start_row, end_row, query, buffe
   while true do
     local status, id, node = pcall(function() return iter() end)
     if status == false then
+      print("Ran into an error")
       M.clear_cache()
       return
     end
@@ -146,7 +150,7 @@ function M.highlight_parameters_in(root, bufnr, start_row, end_row, query, buffe
         scope = scope:parent()
       end
       local usage_nodes = M.get_usages(node, scope, bufnr, {}, buffer, usage_buffer, nil)
-      M.highlight_nodes(usage_nodes, bufnr, namespace, 'TSParameter')
+      M.highlight_nodes(usage_nodes, bufnr, namespace, 'TSParameter', start_row, end_row)
     end
     ::cont::
   end
@@ -169,19 +173,9 @@ function M.highlight_parameters_v2()
   local query = queries.get_query(lang, 'highlights')
   local root = tree:root()
   local start_row, _, end_row, _ = root:range()
-  -- ts_utils.node_get_text is blocking so attempting to run it and use its return value gives
-  -- us an error, so let's make our own.
   M.buffer_contents = vim.api.nvim_buf_get_lines(bufnr, 0, end_row, true)
   --M.buffers[bufnr] = M.buffer_contents
   M.highlight_parameters_in(root, bufnr, start_row, end_row, query, M.buffer_contents, semantic_ns)
-  --local t = uv.thread_self()
-  --local handle
-  --handle = uv.new_thread(function()
-    --local uv = require('luv')
-    ----M.highlight_parameters_async(root, bufnr, start_row, end_row, query, M.buffer_contents)
-    --print(uv.thread_equal(uv.thread_self(), t))
-  --end)
-  --handle:send()
 end
 
 -- Gets the starting and ending line that is viewable in the current buffer
