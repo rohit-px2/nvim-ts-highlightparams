@@ -37,8 +37,6 @@ end
 -- Highlights every node in nodes with the given buffer, highlighting namespace,
 -- and highlight group
 function M.highlight_nodes(nodes, bufnr, namespace, hlgroup, start_row, end_row)
-  start_row = start_row or 0
-  end_row = end_row or -1
   vim.api.nvim_buf_clear_namespace(bufnr, namespace, start_row, end_row)
   for _, node in ipairs(nodes) do
     vim.schedule(function()
@@ -118,6 +116,8 @@ M.types = {
   ["function_item"] = true,
   ["method_declaration"] = true,
   ["local_function"] = true,
+  -- go anonymous function
+  ["func_literal"] = true,
 }
 
 local function is_func_node(type)
@@ -260,7 +260,7 @@ function M.highlight_parameters_in_view()
       --if cur_node == root then break end
       --cur_node = cur_node:parent()
     --end
-    M.highlight_parameters_in(root, bufnr, view_start, view_end, query, M.buffer_contents, scope_ns)
+    M.highlight_parameters_in(root, bufnr, view_start, view_end, query, M.buffer_contents, semantic_ns)
     handle:close()
   end))
   handle:send()
