@@ -264,13 +264,19 @@ function M.highlight_parameters_in_view(opts)
     local cur_node = ts_utils.get_node_at_cursor(0)
     if not cur_node then return end
     if cur_node == root then return end
+    local largest_function_scope = cur_node
     while true do
+      -- Consider largest function scope instead of largest non-root scope,
+      -- since only functions have parameters
       if not cur_node:parent() or cur_node:parent() == root then break
       else
         cur_node = cur_node:parent()
+        if is_func_node(cur_node:type()) then
+          largest_function_scope = cur_node
+        end
       end
     end
-    local root_start, _, root_end, _ = cur_node:range()
+    local root_start, _, root_end, _ = largest_function_scope:range()
     view_start = root_start and math.min(view_start, root_start) or view_start
     view_end = root_end and math.max(view_end, root_end) or view_end
     if view_start < 0 then view_start = 0 end
