@@ -162,6 +162,7 @@ end
 -- Specifically, opts.maxlines is the maximum number of lines for which
 -- the function will activate.
 function M.highlight_parameters_v2(opts)
+  if M.disabled then return end
   opts = opts or {}
   opts.maxlines = opts.maxlines or 10000
   local bufnr = vim.api.nvim_get_current_buf()
@@ -222,6 +223,7 @@ end
 --  opts.maxlines: The max number of lines for which the function will activate highlighting.
 --  opts.call_interval: The minimum amount of time between each call.
 function M.highlight_parameters_in_view(opts)
+  if M.disabled then return end
   opts = opts or {}
   opts.maxlines = opts.maxlines or 10000
   opts.call_interval = opts.call_interval or 200000000
@@ -306,6 +308,7 @@ end
 -- as there will be a huge delay
 -- From my estimates a ~1500 line file will take roughly 0.4 seconds
 function M.highlight_parameters()
+  if M.disabled then return end
   local bufnr = vim.api.nvim_get_current_buf()
   local lang = parsers.get_buf_lang(bufnr)
   if not lang then return end
@@ -329,6 +332,27 @@ function M.highlight_parameters()
         end
       end
     end
+  end
+end
+
+-- Disables parameters highlighting and clears any previous highlights that the module made.
+function M.disable()
+  M.disabled = true
+  M.clear_cache()
+end
+
+-- Enables parameters highlighting
+function M.enable()
+  M.disabled = false
+  M.highlight_parameters_v2() -- Rehighlight
+end
+
+-- Toggles between enabled and disabled
+function M.toggle()
+  if M.disabled then
+    M.enable()
+  else
+    M.disable()
   end
 end
 
