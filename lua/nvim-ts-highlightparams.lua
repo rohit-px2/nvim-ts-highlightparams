@@ -158,9 +158,26 @@ end
 
 
 -- Around 5x faster than v1
-function M.highlight_parameters_v2()
+-- @param opts table the options table.
+-- Specifically, opts.maxlines is the maximum number of lines for which
+-- the function will activate.
+function M.highlight_parameters_v2(opts)
+  opts = opts or {}
+  opts.maxlines = opts.maxlines or 10000
   local bufnr = vim.api.nvim_get_current_buf()
   if not bufnr then return end
+
+  -- Check if we should even do anything
+  local new_tick = vim.api.nvim_buf_get_changedtick(bufnr)
+  if new_tick == M.tick[bufnr] then return end
+  -- Set the old tick to the new tick
+  M.tick[bufnr] = new_tick
+
+  -- Disable highlighting for files with number of lines > opts.maxlines
+  local lines = tonumber(vim.api.nvim_exec([[echo line('$')]], true))
+  if lines and lines > opts.maxlines then return
+  elseif not lines then return end
+
   local lang = parsers.get_buf_lang(bufnr)
   if not lang then return end
   local parser = parsers.get_parser(bufnr, lang)
@@ -202,14 +219,20 @@ end
 -- Should work well with highlight_parameters_v2
 -- (run highlight_parameters_v2 on BufEnter, and run this continuously
 -- (CursorHold, CursorMoved, TextChanged))
-function M.highlight_parameters_in_view()
+-- @param opts table The options table. Considers two properties:
+--  opts.maxlines: The max number of lines for which the function will activate highlighting.
+--  opts.call_interval: The minimum amount of time between each call.
+function M.highlight_parameters_in_view(opts)
+  opts = opts or {}
+  opts.maxlines = opts.maxlines or 10000
+  opts.call_interval = opts.call_interval or 200000000
   local handle
   handle = uv.new_async(vim.schedule_wrap(function()
     local bufnr = vim.api.nvim_get_current_buf()
     if not bufnr then return end
     local cur_time = uv.hrtime()
     -- Allow call every 0.2 secs minimum
-    if (M.prev_time and cur_time - M.prev_time < 200000000) then
+    if (M.prev_time and cur_time - M.prev_time < opts.call_interval) then
       --print("Not doing any work now")
       return
     end
@@ -222,7 +245,7 @@ function M.highlight_parameters_in_view()
     M.prev_time = cur_time
 
     local lines = tonumber(vim.api.nvim_exec([[echo line('$')]], true))
-    if lines and lines > 10000 then return
+    if lines and lines > opts.maxlines then return
     elseif not lines then return end
 
     local lang = M.langs[bufnr] or parsers.get_buf_lang(bufnr)
@@ -261,6 +284,7 @@ function M.highlight_parameters_in_view()
       --cur_node = cur_node:parent()
     --end
     M.highlight_parameters_in(root, bufnr, view_start, view_end, query, M.buffer_contents, semantic_ns)
+    --print("Time Elapsed:", uv.hrtime() - cur_time)
     handle:close()
   end))
   handle:send()
