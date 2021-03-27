@@ -181,8 +181,7 @@ function M.highlight_parameters_v2(opts)
   local lang = parsers.get_buf_lang(bufnr)
   if not lang then return end
   local parser = parsers.get_parser(bufnr, lang)
-  local lines = tonumber(vim.api.nvim_exec([[echo line('$')]], true))
-  if lines and lines > 10000 then return end
+
   if not parser then return end
   M.current_buffer = bufnr
   local tstree = parser:parse()
