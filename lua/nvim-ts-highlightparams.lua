@@ -46,7 +46,8 @@ function M.highlight_nodes(nodes, bufnr, namespace, hlgroup, start_row, end_row)
 end
 
 -- Like ts_utils.get_node_text but without the nvim api call (use buffer parameter)
-function M.get_node_text(node, buffer)
+function M.get_node_text(node, buffer, offset)
+  offset = offset or 0
   local start_row, start_col, end_row, end_col = node:range()
   --print("Start row:", start_row)
   --print("Start col:", start_col)
@@ -60,7 +61,7 @@ function M.get_node_text(node, buffer)
     print(lines[1])
     return lines
   else
-    local line = buffer[start_row+1]
+    local line = buffer[start_row - offset + 1]
     local x = line and { string.sub(line, start_col + 1, end_col) } or {}
     return x
   end
@@ -69,11 +70,11 @@ end
 -- Gets usages of node within the given scope.
 -- Here, a "usage" means an identifier within the scope whose text matches
 -- the text of node.
-function M.get_usages(node, scope, bufnr, usage_nodes, buffer, tbl, text, sr, sc, er, ec)
+function M.get_usages(node, scope, bufnr, usage_nodes, buffer, tbl, text, sr, sc, er, ec, offset)
   if not sr then
     sr, sc, er, ec = node:range()
   end
-  text = text or M.get_node_text(node, buffer)[1]
+  text = text or M.get_node_text(node, buffer, offset)[1]
   usage_nodes = usage_nodes or {}
   for pnode, _ in scope:iter_children() do
     if tbl[pnode] == text then
@@ -84,8 +85,8 @@ function M.get_usages(node, scope, bufnr, usage_nodes, buffer, tbl, text, sr, sc
     -- First we check if it is a scope
     if pnode:named_child_count() ~= 0 then
       -- Iterate over children recursively
-     M.get_usages(node, pnode, bufnr, usage_nodes, buffer, tbl, text, sr, sc, er, ec)
-    elseif pnode:type() == 'identifier' and M.get_node_text(pnode, buffer)[1] == text then
+     M.get_usages(node, pnode, bufnr, usage_nodes, buffer, tbl, text, sr, sc, er, ec, offset)
+    elseif pnode:type() == 'identifier' and M.get_node_text(pnode, buffer, offset)[1] == text then
       -- A function with the same name as the parameter should not be highlighted
       -- In general, identifiers with the same name as a parameter, but that come before
       -- the parameter, are not usages of the parameter.
@@ -149,7 +150,7 @@ function M.highlight_parameters_in(root, bufnr, start_row, end_row, query, buffe
         end
         scope = scope:parent()
       end
-      local usage_nodes = M.get_usages(node, scope, bufnr, {}, buffer, usage_buffer, nil)
+      local usage_nodes = M.get_usages(node, scope, bufnr, {}, buffer, usage_buffer, nil, nil, nil, nil, nil, start_row)
       M.highlight_nodes(usage_nodes, bufnr, namespace, 'TSParameter', start_row, end_row)
     end
     ::cont::
@@ -220,8 +221,8 @@ end
 -- (run highlight_parameters_v2 on BufEnter, and run this continuously
 -- (CursorHold, CursorMoved, TextChanged))
 -- @param opts table The options table. Considers two properties:
---  opts.maxlines: The max number of lines for which the function will activate highlighting.
---  opts.call_interval: The minimum amount of time between each call.
+--  opts.maxlines: The max number of lines for which the function will activate highlighting (integer)
+--  opts.call_interval: The minimum amount of time between each call, in nanoseconds (integer)
 function M.highlight_parameters_in_view(opts)
   if M.disabled then return end
   opts = opts or {}
@@ -281,15 +282,9 @@ function M.highlight_parameters_in_view(opts)
     view_end = root_end and math.max(view_end, root_end) or view_end
     if view_start < 0 then view_start = 0 end
     if view_end > lines-1 then view_end = lines-1 end
-    --print(view_start)
-    --print(view_end)
-    M.buffer_contents = vim.api.nvim_buf_get_lines(bufnr, 0, view_end+1, true)
-    -- Highlight in current function if user cannot see parameters
-    --local cur_node = ts_utils.get_node_at_cursor()
-    --while not cur_node:type():find("function") do
-      --if cur_node == root then break end
-      --cur_node = cur_node:parent()
-    --end
+    -- Get range of lines between the start of our necessary range and the end, which is all we need
+    M.buffer_contents = vim.api.nvim_buf_get_lines(bufnr, view_start, view_end+1, true)
+
     M.highlight_parameters_in(root, bufnr, view_start, view_end, query, M.buffer_contents, semantic_ns)
     --print("Time Elapsed:", uv.hrtime() - cur_time)
     handle:close()
