@@ -238,7 +238,7 @@ function M.highlight_parameters_in_view(opts)
       --print("Not doing any work now")
       return
     end
-    local new_tick = vim.b.changedtick
+    local new_tick = vim.api.nvim_buf_get_changedtick(bufnr)
     if new_tick == M.tick[bufnr] then
       --print("Not doing any work")
       return
