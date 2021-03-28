@@ -190,10 +190,10 @@ function M.highlight_parameters_v2(opts)
   local tree = tstree[1]
   local query = queries.get_query(lang, 'highlights')
   local root = tree:root()
-  local start_row, _, end_row, _ = root:range()
+  local _, _, end_row, _ = root:range()
   M.buffer_contents = vim.api.nvim_buf_get_lines(bufnr, 0, end_row, true)
   --M.buffers[bufnr] = M.buffer_contents
-  M.highlight_parameters_in(root, bufnr, start_row, end_row, query, M.buffer_contents, semantic_ns)
+  M.highlight_parameters_in(root, bufnr, 0, end_row, query, M.buffer_contents, semantic_ns)
 end
 
 -- Gets the starting and ending line that is viewable in the current buffer
