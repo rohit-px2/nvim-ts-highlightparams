@@ -168,6 +168,7 @@ function M.highlight_parameters_v2(opts)
   opts.maxlines = opts.maxlines or 10000
   local bufnr = vim.api.nvim_get_current_buf()
   if not bufnr then return end
+  M.add_buffer(bufnr)
 
   -- Check if we should even do anything
   local new_tick = vim.api.nvim_buf_get_changedtick(bufnr)
@@ -206,16 +207,22 @@ end
 
 M.prev_time = uv.hrtime()
 M.tick = {}
-
+M.buffers = {}
 -- Clears cache contents
 function M.clear_cache()
   M.buffer_contents = {}
   M.tick = {}
   M.parsers = {}
-  vim.api.nvim_buf_clear_namespace(0, semantic_ns, 0, -1)
-  vim.api.nvim_buf_clear_namespace(0, scope_ns, 0, -1)
+  for bufnr, _ in pairs(M.buffers) do
+    vim.api.nvim_buf_clear_namespace(bufnr, semantic_ns, 0, -1)
+    vim.api.nvim_buf_clear_namespace(bufnr, scope_ns, 0, -1)
+  end
 end
 
+function M.add_buffer(bufnr)
+  if M.buffers[bufnr] then return
+  else M.buffers[bufnr] = true end
+end
 -- Only highlight parameters that the user can see
 -- Should work well with highlight_parameters_v2
 -- (run highlight_parameters_v2 on BufEnter, and run this continuously
@@ -231,6 +238,7 @@ function M.highlight_parameters_in_view(opts)
   local handle
   handle = uv.new_async(vim.schedule_wrap(function()
     local bufnr = vim.api.nvim_get_current_buf()
+    M.add_buffer(bufnr)
     if not bufnr then return end
     local cur_time = uv.hrtime()
     -- Allow call every 0.2 secs minimum
@@ -355,6 +363,14 @@ function M.toggle()
   else
     M.disable()
   end
+end
+
+function M.setup(opts)
+  opts = opts or {}
+  opts.maxlines = opts.maxlines or 10000
+  opts.call_interval = opts.call_interval or 200000000
+  vim.cmd(string.format("autocmd BufEnter * lua require'nvim-ts-highlightparams'.highlight_parameters_v2({maxlines = %d})", opts.maxlines))
+  vim.cmd(string.format("autocmd TextChangedI * lua require'nvim-ts-highlightparams'.highlight_parameters_in_view({maxlines = %d, call_interval = %d})", opts.maxlines, opts.call_interval))
 end
 
 return M
