@@ -208,14 +208,15 @@ end
 M.prev_time = uv.hrtime()
 M.tick = {}
 M.buffers = {}
--- Clears cache contents
+-- Clears cache contents and removes previous highlighting
 function M.clear_cache()
   M.buffer_contents = {}
   M.tick = {}
   M.parsers = {}
   for bufnr, _ in pairs(M.buffers) do
-    vim.api.nvim_buf_clear_namespace(bufnr, semantic_ns, 0, -1)
-    vim.api.nvim_buf_clear_namespace(bufnr, scope_ns, 0, -1)
+    -- Pcall to avoid 'invalid buffer' error (we don't need to consider it here)
+    pcall(function() vim.api.nvim_buf_clear_namespace(bufnr, semantic_ns, 0, -1) end)
+    pcall(function() vim.api.nvim_buf_clear_namespace(bufnr, scope_ns, 0, -1) end)
   end
 end
 
@@ -346,12 +347,14 @@ end
 
 -- Disables parameters highlighting and clears any previous highlights that the module made.
 function M.disable()
+  --print("Highlighting disabled")
   M.disabled = true
   M.clear_cache()
 end
 
 -- Enables parameters highlighting
 function M.enable()
+  --print("Highlighting enabled")
   M.disabled = false
   M.highlight_parameters_v2() -- Rehighlight
 end
@@ -369,6 +372,10 @@ function M.setup(opts)
   opts = opts or {}
   opts.maxlines = opts.maxlines or 10000
   opts.call_interval = opts.call_interval or 200000000
+  opts.disabled = opts.disabled or false
+  if opts.disabled then
+    M.disabled = true
+  end
   vim.cmd(string.format("autocmd BufEnter * lua require'nvim-ts-highlightparams'.highlight_parameters_v2({maxlines = %d})", opts.maxlines))
   vim.cmd(string.format("autocmd TextChangedI * lua require'nvim-ts-highlightparams'.highlight_parameters_in_view({maxlines = %d, call_interval = %d})", opts.maxlines, opts.call_interval))
 end
