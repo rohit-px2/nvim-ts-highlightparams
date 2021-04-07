@@ -117,6 +117,7 @@ M.types = {
   ["function_item"] = true,
   ["method_declaration"] = true,
   ["local_function"] = true,
+  ["closure_expression"] = true,
   -- go anonymous function
   ["func_literal"] = true,
 }
@@ -177,7 +178,7 @@ function M.highlight_parameters_v2(opts)
   M.tick[bufnr] = new_tick
 
   -- Disable highlighting for files with number of lines > opts.maxlines
-  local lines = tonumber(vim.api.nvim_exec([[echo line('$')]], true))
+  local lines = vim.fn.line('$')
   if lines and lines > opts.maxlines then return
   elseif not lines then return end
 
@@ -200,8 +201,8 @@ end
 -- Gets the starting and ending line that is viewable in the current buffer
 -- Note: 0-indexed
 function M.get_view_range()
-  local top_line = tonumber(vim.api.nvim_exec([[echo line('w0')]], true))
-  local bot_line = tonumber(vim.api.nvim_exec([[echo line('w$')]], true))
+  local top_line = vim.fn.line('w0')
+  local bot_line = vim.fn.line('w$')
   return top_line-1, bot_line-1
 end
 
@@ -255,7 +256,7 @@ function M.highlight_parameters_in_view(opts)
     M.tick[bufnr] = new_tick
     M.prev_time = cur_time
 
-    local lines = tonumber(vim.api.nvim_exec([[echo line('$')]], true))
+    local lines = vim.fn.line('$')
     if lines and lines > opts.maxlines then return
     elseif not lines then return end
 
